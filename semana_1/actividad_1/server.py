@@ -8,18 +8,21 @@ def receive_full_mesage(dgram_socket, buff_size, end_of_message):
 
     # recibimos la primera parte del mensaje
     buffer, address = dgram_socket.recvfrom(buff_size)
-    full_message = buffer.decode().rstrip()
+    full_message = buffer.decode()
     # verificamos si llegó el mensaje completo o si aún faltan partes del mensaje
     is_end_of_message = contains_end_of_message(full_message, end_of_message)
     # si el mensaje llegó completo (o sea que contiene la secuencia de fin de mensaje) removemos la secuencia de fin de mensaje
     if is_end_of_message:
+        full_message = full_message.rstrip()
         full_message = full_message[0:(len(full_message) - len(end_of_message))]
+        print(full_message)
 
     # si el mensaje no está completo (no contiene la secuencia de fin de mensaje)
     else:
         # entramos a un while para recibir el resto y seguimos esperando información
         # mientras el buffer no contenga secuencia de fin de mensaje
         while not is_end_of_message:
+            print("trabajando...")
             # recibimos un nuevo trozo del mensaje
             buffer, address = dgram_socket.recvfrom(buff_size)
             # y lo añadimos al mensaje "completo"
@@ -29,6 +32,7 @@ def receive_full_mesage(dgram_socket, buff_size, end_of_message):
             is_end_of_message = contains_end_of_message(full_message, end_of_message)
             if is_end_of_message:
                 # removemos la secuencia de fin de mensaje
+                full_message = full_message.rstrip()
                 full_message = full_message[0:(len(full_message) - len(end_of_message))]
 
     # finalmente retornamos el mensaje
@@ -36,6 +40,7 @@ def receive_full_mesage(dgram_socket, buff_size, end_of_message):
 
 
 def contains_end_of_message(message, end_sequence):
+    message = message.rstrip()
     if end_sequence == message[(len(message) - (len(end_sequence))):len(message)]:
         return True
     else:
@@ -58,4 +63,18 @@ while True:
     message, address = receive_full_mesage(dgram_socket, bufsize, end_of_message)
     print(' -> Se ha recibido el siguiente mensaje: ' + message)
     print("Echo")
-    dgram_socket.sendto(message.encode(), address)
+    #dgram_socket.sendto(message.encode(), address)
+    send_message = (message+end_of_message).encode()
+    chunks, chunk_size = len(send_message)//1024 +1, 1024
+
+    chunked_array = []
+
+    for i in range(chunks):
+        if (i+1)*chunk_size<len(send_message):
+            chunked_array.append(send_message[i*chunk_size:(i+1)*chunk_size])
+        else:
+            chunked_array.append(send_message[i*chunk_size:len(send_message)])
+
+    # enviamos el mensaje a través del socket
+    for m in chunked_array:
+        dgram_socket.sendto(m, address)
