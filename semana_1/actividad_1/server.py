@@ -58,6 +58,7 @@ adrs = ('localhost', port)
 dgram_socket.bind(adrs)
 print('... Esperando clientes')
 
+# Nos quedamos esperando mensajes
 while True:
     # Recibir mensajes. Este método nos entrega el mensaje junto a la dirección de origen del mensaje
     message, address = receive_full_mesage(dgram_socket, bufsize, end_of_message)
@@ -65,16 +66,16 @@ while True:
     print("Echo")
     #dgram_socket.sendto(message.encode(), address)
     send_message = (message+end_of_message).encode()
+
+    # Separamos el mensaje qu recibimos en varios pedazos y los metemos a un arreglo
     chunks, chunk_size = len(send_message)//1024 +1, 1024
-
     chunked_array = []
-
     for i in range(chunks):
         if (i+1)*chunk_size<len(send_message):
             chunked_array.append(send_message[i*chunk_size:(i+1)*chunk_size])
         else:
             chunked_array.append(send_message[i*chunk_size:len(send_message)])
 
-    # enviamos el mensaje a través del socket
+    # Enviamos cada pedazo uno por uno al cliente
     for m in chunked_array:
         dgram_socket.sendto(m, address)

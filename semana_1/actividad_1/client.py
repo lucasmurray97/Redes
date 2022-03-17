@@ -2,6 +2,7 @@
 import socket
 
 def contains_end_of_message(message, end_sequence):
+    # Esta funcion revisa que message contenga la secuencia end_sequence al final
     message = message.rstrip()
     print(message)
     if end_sequence == message[(len(message) - (len(end_sequence))):len(message)]:
@@ -28,22 +29,23 @@ bufsize = 1024
 
 send_message = (message+end_of_message).encode()
 
+#Calculamos la cantidad de "pedazos" en los que hay que dividir el mensaje
 chunks, chunk_size = len(send_message)//1024 +1, 1024
 
+# Armamos un arreglo con los pedazos del mensaje
 chunked_array = []
-
 for i in range(chunks):
     if (i+1)*chunk_size<len(send_message):
         chunked_array.append(send_message[i*chunk_size:(i+1)*chunk_size])
     else:
         chunked_array.append(send_message[i*chunk_size:len(send_message)])
 
-# enviamos el mensaje a través del socket
+# enviamos uno por uno los pedazos del mensaje
 for m in chunked_array:
     client_socket.sendto(m, adrs)
 print("... Mensaje enviado")
 
-# recibimos el mensaje
+# recibimos el mensaje de respuesta
 print("...Esperando mensaje")
 message = ""
 while True:
