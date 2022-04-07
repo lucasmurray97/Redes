@@ -46,14 +46,16 @@ def contains_end_of_message(message, end_sequence):
     else:
         return False
 # Recibimos parametros de la entrada estandar:
+correo = ""
 todos_los_argumentos = sys.argv
 numero_de_argumentos = len(sys.argv)
-configuration_file = sys.argv[1]
-with open(configuration_file) as file:
-     # usamos json para manejar los datos
-     data = json.load(file)
-     # recolectamos el parametro correo del archivo
-     correo = data["correo"]
+if numero_de_argumentos >=0:
+    configuration_file = sys.argv[1]
+    with open(configuration_file) as file:
+        # usamos json para manejar los datos
+        data = json.load(file)
+        # recolectamos el parametro correo del archivo
+        correo = data["correo"]
 
 # definimos el tamaño del buffer de recepción 
 buff_size = 64
@@ -82,7 +84,7 @@ while True:
     # luego recibimos el mensaje usando la función que programamos
     received_message = receive_full_mesage(connection, buff_size, end_of_message)
 
-    print(' -> Se ha recibido el siguiente mensaje: ' + received_message)
+    print(' -> Se ha recibido el siguiente mensaje: \n' + received_message)
 
     # Definimos el html de respuesta
     html = "<html><head><title>Bienvenida!</title></head><body><H1>Bienvenido</H1></body></html>"
