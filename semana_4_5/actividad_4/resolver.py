@@ -78,6 +78,7 @@ def resolver(domain):
         address = ask_for_domain(initial_daddy, address, port)
     print(f"{domain} es {address}")
     return address
+    resolver()
 
 
 
