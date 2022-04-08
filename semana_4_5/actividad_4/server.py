@@ -10,7 +10,7 @@ dgram_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 #definimos buffsize, message y port
 bufsize = 1024
-# end_of_message = "10"
+# ocupé el puerto 5053 porque el 5353 me salía siempre ocupado :(
 port = 5053
 adrs = ('localhost', port)
 dgram_socket.bind(adrs)
