@@ -5,6 +5,7 @@ import re
 import socket
 import sys
 import json
+from traceback import print_tb
 def receive_full_mesage(connection_socket, buff_size, end_of_message):
     # esta función se encarga de recibir el header de la request completo.
     # en caso de que el mensaje sea más grande que el tamaño del buffer 'buff_size', esta función va esperar a que
@@ -67,8 +68,13 @@ def recieve_response(connection_socket, buff_size, end_of_message, forbidden):
     # Se itera sobre las lineas del header y se guardan en header_dict
     for i in header_list:
         header_dict[i.split(": ")[0]] = i.split(" ")[1]
+    # Se entra a un loop hasta recibir el body completo:
+    if len(body.encode()) <int(header_dict["Content-Length"]):
+        body += connection_socket.recv(buff_size).decode()
     # Se aplica la función replace_forbidden sobre el body
     body = replace_forbidden(body, forbidden)
+    # Se actualiza el header:
+    header = update_header(header_dict, len(body.encode()))
     # Se vuelve a armar la response actualizada
     response = header + end_of_message + body
     # Se retorna la response, el header_dict y el body
@@ -98,6 +104,15 @@ def add_correo(header_dict, correo):
     # Se agrega el doble salto de linea
     fixed_request += "\r\n"
     return fixed_request, header_dict
+# Función que actualiza el largo del header después de hacer los reemplazos. Ojo que recibe el body_length que es el largo en bytes.
+def update_header(header_dict ,body_length):
+    header_dict["Content-Length"] = str(body_length)
+    fixed_header = list(header_dict.keys())[0] + "\r\n"
+    for key in list(header_dict.keys())[1:]:
+        fixed_header += key + ": " + header_dict[key] + "\r\n"
+    # Se agrega el doble salto de linea
+    fixed_header += "\r\n"
+    return fixed_header
 # Recibimos parametros de la entrada estandar:
 correo = ""
 todos_los_argumentos = sys.argv
