@@ -65,20 +65,24 @@ def ask_for_domain(domain, address, port):
             dns_reply = send_dns_message(reply_dict["primary_name_server"], address, port)
             reply_dict = parserDNS(dns_reply)
     return str(reply_dict["answer_rdata"])
-def resolver(domain):
-    sub_domains = domain.split(".")
-    initial_daddy = sub_domains.pop() + "."
-    initial_address = "8.8.8.8"
-    port = 53
-    address = ask_for_domain(initial_daddy, initial_address, port)
-    print(f"(debug) consultando el NS de .{initial_daddy} en raiz ... ok")
-    while len(sub_domains)>0:
-        initial_daddy =  sub_domains.pop() + "." + initial_daddy
+def resolver(domain, cache):
+    if domain in cache.keys():
+        print("responded from cache")
+        return cache[domain], cache
+    else:
+        sub_domains = domain.split(".")
+        initial_daddy = sub_domains.pop() + "."
+        initial_address = "8.8.8.8"
+        port = 53
+        address = ask_for_domain(initial_daddy, initial_address, port)
         print(f"(debug) consultando el NS de .{initial_daddy} en raiz ... ok")
-        address = ask_for_domain(initial_daddy, address, port)
-    print(f"{domain} es {address}")
-    return address
-    resolver()
+        while len(sub_domains)>0:
+            initial_daddy =  sub_domains.pop() + "." + initial_daddy
+            print(f"(debug) consultando el NS de .{initial_daddy} en raiz ... ok")
+            address = ask_for_domain(initial_daddy, address, port)
+        print(f"{domain} es {address}")
+        cache[domain] = address
+    return address, cache
 
 
 
