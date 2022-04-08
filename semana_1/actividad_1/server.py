@@ -38,7 +38,7 @@ def receive_full_mesage(dgram_socket, buff_size, end_of_message):
     # finalmente retornamos el mensaje
     return full_message, address
 
-
+# Función que revisa si el mensaje termina en end_sequence y retorna un booleano
 def contains_end_of_message(message, end_sequence):
     message = message.rstrip()
     if end_sequence == message[(len(message) - (len(end_sequence))):len(message)]:
@@ -64,7 +64,6 @@ while True:
     message, address = receive_full_mesage(dgram_socket, bufsize, end_of_message)
     print(' -> Se ha recibido el siguiente mensaje: ' + message)
     print("Echo")
-    #dgram_socket.sendto(message.encode(), address)
     send_message = (message+end_of_message).encode()
 
     # Separamos el mensaje qu recibimos en varios pedazos y los metemos a un arreglo

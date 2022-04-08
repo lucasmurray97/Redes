@@ -88,14 +88,12 @@ while True:
 
     # Definimos el html de respuesta
     html = "<html><head><title>Bienvenida!</title></head><body><H1>Bienvenido</H1></body></html>"
-    # Armamos el mensaje http
+    # Armamos el mensaje http, el cual contiene el header X-ElQuePregunta, con valor = correo
     response_message = (f"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\nX-ElQuePregunta: {correo}\r\nContent-Length: 84\r\n\r\n{html}").encode()
-    # Enviamos el mensaje
+    # Enviamos el mensaje al cliente
     connection.send(response_message)
 
     # cerramos la conexión
-    # notar que la dirección que se imprime indica un número de puerto distinto al 8888
     connection.close()
     print("conexión con " + str(address) + " ha sido cerrada")
-
     # seguimos esperando por si llegan otras conexiones

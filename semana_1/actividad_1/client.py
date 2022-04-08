@@ -29,7 +29,7 @@ bufsize = 1024
 
 send_message = (message+end_of_message).encode()
 
-#Calculamos la cantidad de "pedazos" en los que hay que dividir el mensaje
+# Calculamos la cantidad de "pedazos" en los que hay que dividir el mensaje
 chunks, chunk_size = len(send_message)//1024 +1, 1024
 
 # Armamos un arreglo con los pedazos del mensaje
@@ -51,6 +51,7 @@ message = ""
 while True:
     message, address = client_socket.recvfrom(bufsize)
     print(' -> Se ha recibido el siguiente mensaje: ' + message.decode())
+    # Si contiene la secuencia de final, salimos del loop
     if contains_end_of_message(message.decode(), end_of_message):
         break
 # cerramos la conexión
