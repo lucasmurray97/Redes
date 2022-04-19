@@ -9,3 +9,10 @@ try:
 except socket.timeout as e: 
     print("Conection took too long")
     sys.exit(1)
+
+try:
+    message = server_socket.recv(1024)
+    print(message)
+except socket.timeout as e: 
+    print("Conection took too long")
+    sys.exit(1)

@@ -7,6 +7,7 @@ class socketTCP:
         self.address = (orig_address, port)
         self.dest_adr = dest_address
         self.nmr_seq = None
+        self.seq = FileNotFoundError
     def set_seq(self, nmr):
         self.nmr_seq = nmr
     def increase_seq(self, inc):
@@ -38,6 +39,8 @@ class socketTCP:
             dict_tcp["SEQ"] += 1
             message =  self.dict_to_tcp(dict_tcp)
             self.socket_udp.sendto(message.encode(), address)
+            self.seq = dict_tcp["SEQ"]
+            print(f"Secuencia del socket: {self.seq}")
             print("Three-way handshake was succesfull")
         else:
             raise NameError("Three-way handshake wasn't succesfull")
@@ -63,8 +66,10 @@ class socketTCP:
         sequence2 = tcp_dict["SEQ"]
         print(f"Recieved sequence: {sequence2}")
         if tcp_dict["ACK"] == 1 and tcp_dict["SEQ"] == sequence +2:
-            print("Three-way handshake was succesfull")
             self.dest_adr = address
+            self.seq = tcp_dict["SEQ"]
+            print(f"Secuencia del socket: {self.seq}")
+            print("Three-way handshake was succesfull")
             return self, self.address
         else:
             raise NameError("Three-way handshake wasn't succesfull")
@@ -87,7 +92,7 @@ class socketTCP:
     def dict_to_tcp(self, tcp_dict):
         tcp_message = str(tcp_dict["SYN"]) + "|||" + str(tcp_dict["ACK"]) + "|||" + str(tcp_dict["FIN"]) + "|||" + str(tcp_dict["SEQ"])
         try:
-            tcp_message += "|||" + tcp_dict["DATOS"] 
+            tcp_message += "|||" + str(tcp_dict["DATOS"])
         except:
             pass
         return tcp_message
@@ -112,9 +117,10 @@ class socketTCP:
         tcp_dict["SYN"] = 0
         tcp_dict["ACK"] = 0
         tcp_dict["FIN"] = 0
-        tcp_dict["SEQ"] = 0
+        tcp_dict["SEQ"] = self.seq
         tcp_dict["DATOS"] = message_length
         message_tcp = self.dict_to_tcp(tcp_dict)
+        # print(message_tcp)
         # Enviamos primero el largo del mensaje
         while True:
             self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)
@@ -123,7 +129,8 @@ class socketTCP:
                 break
             tcp_dict_ = self.tcp_to_dict(buffer.decode())
             # Si es que recibimos un acknowledge y la secuencia calza con el largo del mensaje que nosotros enviamos, dejamos de esperar/pedir el mensaje
-            if tcp_dict_["ACK"] == 1 or tcp_dict_["SEQ"] == len(message_length.encode()):
+            if tcp_dict_["ACK"] == 1 or tcp_dict_["SEQ"] == self.seq + len(message_length.encode()):
+                self.seq += len(str(message_length).encode())
                 break
         # Actualizamos el tcp_dict
         tcp_dict = tcp_dict_
@@ -133,9 +140,10 @@ class socketTCP:
             tcp_dict["SYN"] = 0
             tcp_dict["ACK"] = 0
             tcp_dict["FIN"] = 0
-            tcp_dict["SEQ"] = tcp_dict["SEQ"]
+            tcp_dict["SEQ"] = self.seq
             tcp_dict["DATOS"] = m
             message_tcp = self.dict_to_tcp(tcp_dict)
+            # print(message_tcp)
             while True:
                 # Enviamos el pedazito
                 self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)
@@ -146,33 +154,49 @@ class socketTCP:
                 # Pasamos la respuesta a un tcp_dict
                 tcp_dict_ = self.tcp_to_dict(buffer.decode()) 
                 # Si recibimos un acknowledge y la secuencia es igual a la secuencia anterior mas el largo en bytes del mensaje enviado pasamos al pedazo siguiente
-                if tcp_dict_["ACK"] == 1 or tcp_dict_["SEQ"] == tcp_dict_["SEQ"] + len(m.encode()):
+                if tcp_dict_["ACK"] == 1 or tcp_dict_["SEQ"] == self.seq + len(m.encode()):
+                    self.seq += len(m.encode())
                     break
             # Actualizamos el tcp_dict
             tcp_dict = tcp_dict_
     def recv(self, buff_size):
-        sequence = 0
         # Esperamos el mensaje que contiene el largo del total del mensaje
+        full_message = ""
         while True:
             buffer, address = self.socket_udp.recvfrom(buff_size)
             break
         message = buffer.decode()
         tcp_dict = self.tcp_to_dict(message)
         # Guardamos el largo del mensaje total en message_length
-        message_length = tcp_dict["DATA"]
+        message_length = int(tcp_dict["DATOS"])
         # Actualizamos la secuencia
-        sequence = tcp_dict["SEQ"] + len(message_length.encode())
+        self.seq = tcp_dict["SEQ"] + len(str(message_length).encode())
         # Armamos el mensaje tcp
         tcp_dict["SYN"] = 0
         tcp_dict["ACK"] = 1
         tcp_dict["FIN"] = 0
-        tcp_dict["SEQ"] = sequence
-        self.socket_udp.sendto(self.dict_to_tcp(tcp_dict), self.dest_adr)
+        tcp_dict["SEQ"] = self.seq
+        self.socket_udp.sendto(self.dict_to_tcp(tcp_dict).encode(), self.dest_adr)
         while message_length > 0:
             while True:
                 buffer, address = self.socket_udp.recvfrom(buff_size)
                 break
             tcp_dict_ = self.tcp_to_dict(buffer.decode()) 
+            # print(tcp_dict_)
+            # Si la secuencia del mensaje recibido es menor a la secuencia actual, respondemos con el mensaje original
+            if tcp_dict_["SEQ"] < self.seq:
+                print("Mensaje repetido!")
+                self.socket_udp.sendto(self.dict_to_tcp(tcp_dict).encode(), self.dest_adr)
+            else:
+                self.seq += len(tcp_dict_["DATOS"].encode())
+                tcp_dict["SYN"] = 0
+                tcp_dict["ACK"] = 1
+                tcp_dict["FIN"] = 0
+                tcp_dict["SEQ"] = self.seq
+                self.socket_udp.sendto(self.dict_to_tcp(tcp_dict).encode(), self.dest_adr)
+                full_message += tcp_dict_["DATOS"]
+                message_length -= len(tcp_dict_["DATOS"].encode())
+        return full_message
 
 
 

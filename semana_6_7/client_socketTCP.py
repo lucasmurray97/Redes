@@ -13,3 +13,11 @@ try:
 except socket.timeout as e: 
     print("Conection took too long")
     sys.exit(1)
+
+with open('mensaje.txt', 'r') as file:
+    message = file.read()
+try:
+    client_socket.send(message)
+except socket.timeout as e: 
+    print("Conection took too long")
+    sys.exit(1)
