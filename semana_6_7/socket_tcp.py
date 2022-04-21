@@ -8,6 +8,8 @@ class socketTCP:
         self.dest_adr = dest_address
         self.nmr_seq = None
         self.seq = FileNotFoundError
+        self.data_to_recieve = 0
+        self.starting_transaction = True
     def set_seq(self, nmr):
         self.nmr_seq = nmr
     def increase_seq(self, inc):
@@ -120,7 +122,6 @@ class socketTCP:
         tcp_dict["SEQ"] = self.seq
         tcp_dict["DATOS"] = message_length
         message_tcp = self.dict_to_tcp(tcp_dict)
-        # print(message_tcp)
         # Enviamos primero el largo del mensaje
         while True:
             self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)
@@ -129,7 +130,7 @@ class socketTCP:
                 break
             tcp_dict_ = self.tcp_to_dict(buffer.decode())
             # Si es que recibimos un acknowledge y la secuencia calza con el largo del mensaje que nosotros enviamos, dejamos de esperar/pedir el mensaje
-            if tcp_dict_["ACK"] == 1 or tcp_dict_["SEQ"] == self.seq + len(message_length.encode()):
+            if tcp_dict_["ACK"] == 1 and tcp_dict_["SEQ"] == self.seq + len(str(message_length).encode()):
                 self.seq += len(str(message_length).encode())
                 break
         # Actualizamos el tcp_dict
@@ -143,46 +144,52 @@ class socketTCP:
             tcp_dict["SEQ"] = self.seq
             tcp_dict["DATOS"] = m
             message_tcp = self.dict_to_tcp(tcp_dict)
-            # print(message_tcp)
             while True:
                 # Enviamos el pedazito
                 self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)
                 while True:
                     # Esperamos la respuesta
-                    buffer, address = self.socket_udp.recvfrom(64)
-                    break
+                    try:
+                        buffer, address = self.socket_udp.recvfrom(64)
+                        break
+                    except socket.timeout as e:
+                        self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)    
                 # Pasamos la respuesta a un tcp_dict
                 tcp_dict_ = self.tcp_to_dict(buffer.decode()) 
                 # Si recibimos un acknowledge y la secuencia es igual a la secuencia anterior mas el largo en bytes del mensaje enviado pasamos al pedazo siguiente
-                if tcp_dict_["ACK"] == 1 or tcp_dict_["SEQ"] == self.seq + len(m.encode()):
+                if tcp_dict_["ACK"] == 1 and tcp_dict_["SEQ"] == self.seq + len(m.encode()):
                     self.seq += len(m.encode())
                     break
+
             # Actualizamos el tcp_dict
             tcp_dict = tcp_dict_
     def recv(self, buff_size):
-        # Esperamos el mensaje que contiene el largo del total del mensaje
-        full_message = ""
-        while True:
-            buffer, address = self.socket_udp.recvfrom(buff_size)
-            break
-        message = buffer.decode()
-        tcp_dict = self.tcp_to_dict(message)
-        # Guardamos el largo del mensaje total en message_length
-        message_length = int(tcp_dict["DATOS"])
-        # Actualizamos la secuencia
-        self.seq = tcp_dict["SEQ"] + len(str(message_length).encode())
-        # Armamos el mensaje tcp
-        tcp_dict["SYN"] = 0
-        tcp_dict["ACK"] = 1
-        tcp_dict["FIN"] = 0
-        tcp_dict["SEQ"] = self.seq
-        self.socket_udp.sendto(self.dict_to_tcp(tcp_dict).encode(), self.dest_adr)
-        while message_length > 0:
+        # En caso de que este empezando la transmision, esperamos el largo del mensaje:
+        if self.starting_transaction:
+            while True:
+                buffer, address = self.socket_udp.recvfrom(buff_size)
+                break
+            message = buffer.decode()
+            tcp_dict = self.tcp_to_dict(message)
+            # Guardamos el largo del mensaje total en message_length
+            message_length = int(tcp_dict["DATOS"])
+            # Establecemos que quedan message_length bytes por recibir
+            self.data_to_recieve = message_length
+            # Actualizamos la secuencia
+            self.seq = tcp_dict["SEQ"] + len(str(message_length).encode())
+            # Armamos el mensaje tcp
+            tcp_dict["SYN"] = 0
+            tcp_dict["ACK"] = 1
+            tcp_dict["FIN"] = 0
+            tcp_dict["SEQ"] = self.seq
+            self.socket_udp.sendto(self.dict_to_tcp(tcp_dict).encode(), self.dest_adr)
+            # Marcamos que el socket ya partió la transmision
+            self.starting_transaction = False
+        if self.data_to_recieve > 0:
             while True:
                 buffer, address = self.socket_udp.recvfrom(buff_size)
                 break
             tcp_dict_ = self.tcp_to_dict(buffer.decode()) 
-            # print(tcp_dict_)
             # Si la secuencia del mensaje recibido es menor a la secuencia actual, respondemos con el mensaje original
             if tcp_dict_["SEQ"] < self.seq:
                 print("Mensaje repetido!")
@@ -194,9 +201,11 @@ class socketTCP:
                 tcp_dict["FIN"] = 0
                 tcp_dict["SEQ"] = self.seq
                 self.socket_udp.sendto(self.dict_to_tcp(tcp_dict).encode(), self.dest_adr)
-                full_message += tcp_dict_["DATOS"]
-                message_length -= len(tcp_dict_["DATOS"].encode())
-        return full_message
+                message_recieved = tcp_dict_["DATOS"]
+                self.data_to_recieve -= len(tcp_dict_["DATOS"].encode())
+                if self.data_to_recieve == 0:
+                    self.starting_transaction = True
+        return message_recieved
 
 
 
