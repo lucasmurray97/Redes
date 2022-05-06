@@ -11,14 +11,10 @@ except socket.timeout as e:
     sys.exit(1)
 
 try:
-    print("Primer recv")
-    message = server_socket2.recv(128)
-    print("Segundo recv")
-    message += server_socket2.recv(128)
-    print("Tercer recv")
-    message += server_socket2.recv(128)
+    server_socket2.set_window_size(3)
+    message = server_socket2.recv(256, "go_back_n")
+    message+=server_socket2.recv(256, "go_back_n")
     print(message)
-    server_socket2.recv(128)
 except socket.timeout as e: 
     print("Conection took too long")
     sys.exit(1)

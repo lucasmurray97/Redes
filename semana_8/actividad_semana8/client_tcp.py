@@ -17,8 +17,9 @@ except socket.timeout as e:
 with open('mensaje.txt', 'r') as file:
     message = file.read()
 try:
-    client_socket.send(message)
-    client_socket.close()
+    client_socket.set_window_size(3)
+    client_socket.send(message, "go_back_n")
+    #client_socket.close()
 except socket.timeout as e: 
     print("Conection took too long")
     sys.exit(1)

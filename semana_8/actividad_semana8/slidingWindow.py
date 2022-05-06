@@ -99,12 +99,24 @@ class SlidingWindow:
             raise Exception("ERROR in SlidingWindow, put_data(): Variable seq must belong to [Y+0, Y+2N-1]")
 
         try:
-            for i in range(self.window_size):
-                if self.window[i]["seq"] != None:
-                    valid_range = (self.window[i]["seq"] - i, self.window[i]["seq"] + (self.window_size - 1) - i)
-                    if not (valid_range[0] <= seq <= valid_range[1]):
-                        print(valid_range)
+            current_seq_numbers = [self.get_sequence_number(i) for i in range(self.window_size) if self.get_sequence_number(i) != None]
+            if len(current_seq_numbers) == self.window_size:
+                if seq != current_seq_numbers[window_index]:
                         raise Exception("ERROR in SlidingWindow, put_data(): Window is not empty, invalid sequence number")
+            else:
+                
+                for i in range(self.window_size):
+                    if self.window[i]["seq"] != None:
+                        valid_range = range(self.window[i]["seq"] - i, self.window[i]["seq"] + (self.window_size - 1) - i +1)
+                        valid_range_list = []		
+                        for valid_seq_number in valid_range:
+                            if valid_seq_number > self.possible_sequence_numbers[2*self.window_size-1]:
+                                index = valid_seq_number % (self.possible_sequence_numbers[2*self.window_size-1] +1)
+                                valid_range_list.append(self.possible_sequence_numbers[index])
+                            else:
+                                valid_range_list.append(valid_seq_number)
+                        if valid_range_list[window_index] != seq:
+                            raise Exception("ERROR in SlidingWindow, put_data(): Window is not empty, invalid sequence number")
             self.window[window_index]["data"] = data
             self.window[window_index]["seq"] = seq
         except IndexError:
@@ -161,6 +173,3 @@ class SlidingWindow:
         seq_line += "\n"
 
         return separator_line + "\n" + data_line + separator_line + "\n" + seq_line + separator_line
-
-    def __repr__(self):
-        return str(self)
