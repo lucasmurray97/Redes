@@ -5,20 +5,27 @@ from random import randrange
 import sys
 class socketTCP:
     def __init__(self, orig_address, port, dest_address = None):
-        self.socket_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.address = (orig_address, port)
-        self.dest_adr = dest_address
-        self.seq = FileNotFoundError
-        self.data_to_recieve = 0
-        self.starting_transaction = True
-        self.established_conection = False
+        self.socket_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # Socket no orientado a objetos
+        self.address = (orig_address, port) # Par (dirección, puerto) de origen
+        self.dest_adr = dest_address  # Dirección de destino
+        self.seq = None # Secuencia asociada al socket
+        self.data_to_recieve = 0 # Bytes por recibir de la comunicación actual
+        self.starting_transaction = True # Booleano correspondiente a si el socket actualmente está partiendo una conexión o ya inició una
+        self.established_conection = False # Booleano correspondiente a si el socket ya establecío una conexión
+
     def bind(self):
+        """Función que hace bind en el socket sobre la dirección de origen."""
         self.socket_udp.bind((self.address))
+
     def connect(self, address):
+        """Función que realiza el three-way handshake desde el emisor."""
+        # Si el socket ya estableció una conexión arroja error
         if self.established_conection:
             raise NameError("You already established a connection!")
+        # Se establece la dirección de destino
         self.dest_adr = address
         print(f"Original destiny address: {self.dest_adr}")
+        # Se arma el mensaje tcp para iniciar el handshake
         dict_tcp = {}
         dict_tcp["SYN"] = 1
         dict_tcp["ACK"] = 0
@@ -28,6 +35,7 @@ class socketTCP:
         print(f"Initial sequence: {self.seq}")
         message = self.dict_to_tcp(dict_tcp)
         message = message.encode()
+        # Se envía el mensaje inicial y se queda esperando una respuesta
         self.socket_udp.sendto(message, address)
         while True:
             try:
@@ -39,28 +47,40 @@ class socketTCP:
         dict_tcp = self.tcp_to_dict(buffer.decode())
         recieved_seq = dict_tcp["SEQ"]
         print(f"Recieved sequence: {recieved_seq}")
+        # Se revisa si el mensaje recibido coincide con lo que se espera.
         if dict_tcp["SYN"] == 1 and dict_tcp["ACK"] == 1 and dict_tcp["SEQ"] == self.seq + 1:
+            # Se arma el mensaje de respuesta y actualiza la secuencia del socket.
             dict_tcp["SYN"] = 0
             dict_tcp["ACK"] = 1
             dict_tcp["FIN"] = 0
             dict_tcp["SEQ"] += 1
             self.seq+=1
             message =  self.dict_to_tcp(dict_tcp)
+            # Se responde con el mensaje correspondiente
             self.socket_udp.sendto(message.encode(), addres)
+            # Se fija la secuencia del socket
             self.seq = dict_tcp["SEQ"]
+            # Se marca como que el socket ya tiene una conexión establecida
             self.established_conection = True
+            # Se guarda la dirección de destino
             self.dest_adr = addres
             print(f"New destiny address: {self.dest_adr}")
             print(f"Secuencia del socket: {self.seq}")
             print("Three-way handshake was succesfull")
         else:
+            # Si la información del mensaje no corresponde, se levanta un error
             raise NameError("Three-way handshake wasn't succesfull")
     def accept(self):
+        """Función que implementa el lado del receptor del three-way hanshake"""
+        # De tenerse una conexón, se levanta un error
         if self.established_conection:
             raise NameError("You already established a connection!")
+        # Se lleva la conexión a un nuevo puerto
         new_port = self.address[1]+1
         new_socketTCP = socketTCP(self.address[0], new_port)
+        # Se hace bind en el nuevo puerto
         new_socketTCP.bind()
+        # Se espera el mensaje del socket emisor
         while True:
             try:
                 buffer, address = self.socket_udp.recvfrom(64)
@@ -68,8 +88,10 @@ class socketTCP:
             except socket.timeout as e:
                 print("No se recibió el primer mensaje del handshake, intentamos denuevo...")
         tcp_dict = self.tcp_to_dict(buffer.decode())
+        # Si el mensaje no era de sincronización, se levanta un error
         if tcp_dict["SYN"] == 0:
             raise NameError("Message wasn't for sync")
+        # Se arma el mansaje de respuesta y se espera la respuesta
         self.seq = tcp_dict["SEQ"]
         print(f"Recieved sequence: {self.seq}")
         tcp_dict["ACK"] = 1
@@ -88,7 +110,9 @@ class socketTCP:
         tcp_dict = self.tcp_to_dict(buffer.decode())
         sequence2 = tcp_dict["SEQ"]
         print(f"Recieved sequence: {sequence2}")
+        # Se revisa que la información coincida con lo que se espera
         if tcp_dict["ACK"] == 1 and tcp_dict["SEQ"] == self.seq +1:
+            # Se actualiza la secuencia del socket, la dirección de destino y se marca como que el socket ya estableció una conexión
             self.seq += 1
             new_socketTCP.dest_adr = address
             new_socketTCP.seq = self.seq
@@ -97,9 +121,11 @@ class socketTCP:
             print("Three-way handshake was succesfull")
             return new_socketTCP, new_socketTCP.address
         else:
+            # Si la información no calza, se levanta un error
             raise NameError("Three-way handshake wasn't succesfull")
 
     def tcp_to_dict(self, message):
+        """ Función que pasa un mensaje tcp a un diccionario"""
         # [SYN]|||[ACK]|||[FIN]|||[SEQ]|||[DATOS]
         message_list = message.split("|||")
         tcp_dict = {}
@@ -107,24 +133,32 @@ class socketTCP:
         tcp_dict["ACK"] = int(message_list[1])
         tcp_dict["FIN"] = int(message_list[2])
         tcp_dict["SEQ"] = int(message_list[3])
+        # Si vienen datos, se guardan.
         try:
             tcp_dict["DATOS"] = message_list[4]
         except:
             pass
         return tcp_dict
+
     def dict_to_tcp(self, tcp_dict):
+        """Función que pasa un diccionario, con la estructura del generado por tcp_to_dict(...), a un mensaje tcp"""
         tcp_message = str(tcp_dict["SYN"]) + "|||" + str(tcp_dict["ACK"]) + "|||" + str(tcp_dict["FIN"]) + "|||" + str(tcp_dict["SEQ"])
         try:
             tcp_message += "|||" + str(tcp_dict["DATOS"])
         except:
             pass
         return tcp_message
+
     def settimeout(self, timeout_in_seconds):
+        """Función que establece un timeout para las funciones bloqueantes del socket"""
         self.socket_udp.settimeout(timeout_in_seconds)
+
     def send(self, message):
-        # Calculamos la cantidad de "pedazos" en los que hay que dividir el mensaje
+        """Función que envía un mensaje, habiendose establecido una conexión antes"""
+        # Se revisa si el socket ya estableció una conexión, de no ser así se levanta un error
         if not self.established_conection:
             raise NameError("You haven't established a connection yet")
+        # Calculamos la cantidad de "pedazos" en los que hay que dividir el mensaje
         mes_len = len(message)
         chunks, chunk_size = mes_len//64 +1, 64
 
@@ -178,14 +212,14 @@ class socketTCP:
             while True:
                 # Enviamos el pedazito
                 self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)
-                while True:
+                # while True:
                     # Esperamos la respuesta
-                    try:
-                        buffer, address = self.socket_udp.recvfrom(64)
-                        break
-                    except socket.timeout as e:
-                        print("No se obtuvo respuesta, intentamos denuevo...")
-                        self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)    
+                try:
+                    buffer, address = self.socket_udp.recvfrom(64)
+                except socket.timeout as e:
+                    print("No se obtuvo respuesta, intentamos denuevo...")
+                    # self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)  
+                    continue  
                 # Pasamos la respuesta a un tcp_dict
                 tcp_dict_ = self.tcp_to_dict(buffer.decode()) 
                 # Si recibimos un acknowledge y la secuencia es igual a la secuencia anterior mas el largo en bytes del mensaje enviado pasamos al pedazo siguiente
@@ -195,13 +229,10 @@ class socketTCP:
                     break
                 else:
                     print("El mensaje recibido no coincide, tratamos denuevo...")
-                    wa = tcp_dict_["SEQ"]
-                    print(f"Recibí: {wa}")
-                    wa2 = self.seq + len(m.encode())
-                    print(f"pero debi recibir {wa2}")
-            # Actualizamos el tcp_dict
-            # tcp_dict = tcp_dict_
+                    continue
+
     def recv(self, buff_size):
+        """Función que recibe un mensaje con un buffer tamaño buff_size"""
         # Si tiene una conexion establecida, se levanta un error
         if not self.established_conection:
             raise NameError("You haven't established a connection yet")
@@ -215,6 +246,7 @@ class socketTCP:
                 except socket.timeout as e:
                     # Si no logramos recibirlo, nos quedamos esperando hasta recibirlo.
                     print("No se obtuvo respuesta acerca del largo del mensaje, intentamos denuevo...")
+                    continue
             message = buffer.decode()
             tcp_dict = self.tcp_to_dict(message)
             # Si el mensaje contiene la secuencia de final, se maneja el close

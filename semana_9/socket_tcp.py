@@ -165,9 +165,12 @@ class socketTCP:
 ########################################### GO BACK N ##################################################################################################
     def send_using_go_back_n(self, message):
         self.init_seq = self.seq
+        # Cortamos el mensaje en segmentos de tamaño MSS = 8
         data_list = self.chop_message(message, 8)
+        # Creamos un objeto CongestionControl, con MSS=8
         congestion_control = cc.CongestionControl(8)
         print(f"Window size: {congestion_control.get_cwnd()}")
+        # Creamos una ventana que inicia con tamaño cwnd
         data_window = swcc.SlidingWindowCC(congestion_control.get_cwnd(), data_list, self.seq)
         last_ack_received = self.seq - 1 # Debe estar entre Y+0 y Y+5
         step = self.window_size
@@ -188,10 +191,13 @@ class socketTCP:
                 # si hizo timeout reenviamos el último segmento
                 if len(timeouts) > 0:
                     print("Hubo un timeout, reenviamos toda la ventana")
+                    # Informamos a congestion_control que hubo un timeout
                     congestion_control.event_timeout()
+                    # Actualizamos el tamaño de la ventana en congestion_control.get_cwnd()
                     data_window.update_window_size(int(congestion_control.get_cwnd()))
                     print(f"Window size: {congestion_control.get_cwnd()}")
                     (partially_finished, last_seq) = self.resend_window_go_back_n(data_window, data_window.window_size, self.init_seq, timer_list)
+                    # Si llegamos al final del mensaje, revisamos si llegó el ack del ultimo segmento
                     if partially_finished:
                         if last_ack_received == last_seq:
                             finished = True
@@ -214,12 +220,17 @@ class socketTCP:
                     # detenemos el timer
                     if not partially_finished:
                         timer_list.stop_timer(0)
+                    # Informamos que recibimos un ack
                     congestion_control.event_ack_recieved()
                     print(congestion_control.get_cwnd())
+                    # Guardamos el tamaño de la ventana
                     old_size = data_window.window_size
+                    # Actualizamos el tamaño de la ventana según congestion_control.get_cwnd())
                     data_window.update_window_size(int(congestion_control.get_cwnd()))
+                    # Calculamos la diferencia de tamaño entre las ventanas
                     delta = data_window.window_size - old_size
                     print(f"Window size: {congestion_control.get_cwnd()}")
+                    # Calculamos cuanto hay que avanzar la ventana
                     if last_ack_received > seq:
                         step = 0
                         for i in range(data_window.window_size):
@@ -236,26 +247,35 @@ class socketTCP:
                     print(f"last ack recieved: {last_ack_received}, seq recieved: {seq}")
                     print(f"Step: {step}")
                     last_ack_received = tcp_dict_["SEQ"]
+                    # Si es que llegamos al final del mensaje, revisamos si recibimos el ultimo ack del ultimo segmento
                     if partially_finished:
+                        # De ser así, marcamos que terminó el envío
                         if last_ack_received == last_seq:
                             print("We recieved the last ack")
                             finished = True
                             continue 
+                        # Sino, movemos la ventana y continuamos el envío
                         else: 
                             data_window.move_window(step)
                             continue
-                    # actualizamos el segmento
+                    # Intenamos de mover la ventana
                     data_window.move_window(step)
+                    # Consideramos la diferencia entre el tamaño de las ventanas al generarse una actualización
                     start_pos = data_window.window_size - step - delta
+                    # Enviamos la ventana
                     (partially_finished, last_seq) = self.send_partial_window_go_back_n(data_window, data_window.window_size, start_pos, self.init_seq, timer_list)
 
     def send_partial_window_go_back_n(self, data_window, window_size, start_pos, initial_seq, timer_list):
+        """Función que envía una ventana parcialmente, desde la posición start_pos"""
+        # Iniciamos el timer de la ventana
         timer_list.start_timer(0)
         for i in range(start_pos, window_size):
+            # Si es que llegamos al final del mensaje, marcamos que terminamos parcialmente
             if data_window.get_data(i) == None:
                 print("Partially Finished!")
                 print(f"We must wait for the last ack: {data_window.get_sequence_number(i-1) + len(data_window.get_data(i-1).decode())}")
                 return (True, data_window.get_sequence_number(i-1) + len(data_window.get_data(i-1).decode()))
+            # Armamos el mensaje tcp
             tcp_dict = {}
             tcp_dict["SYN"] = 0
             tcp_dict["ACK"] = 0
@@ -263,18 +283,25 @@ class socketTCP:
             tcp_dict["DATOS"] = data_window.get_data(i).decode()
             tcp_dict["SEQ"] = data_window.get_sequence_number(i)
             message_tcp = self.dict_to_tcp(tcp_dict)
+            # Actualizamos la secuencia del socket
             self.seq += len(tcp_dict["DATOS"])
             print(f"Enviamos: {message_tcp}")
+            # Enviamos el segmento
             self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)
+            # Si no hemos llegado al final del mensaje no lo marcamos y no retornamos la secuencia final
         return (False, None)
     def resend_window_go_back_n(self, data_window, window_size, initial_seq, timer_list):
         print("Reenviamos la siguiente ventana")
+        # Se inicia el timer
         timer_list.start_timer(0)
-        for i in range(0, window_size):   
+        # Se itera sobre toda la ventana actual
+        for i in range(0, window_size):  
+            # Si es que llegamos al final del mensaje, marcamos que terminamos parcialmente 
             if data_window.get_data(i) == None:
                 print("Partially Finished!")
                 print(f"We must wait for the last ack: {data_window.get_sequence_number(i-1) + len(data_window.get_data(i-1).decode())}")
                 return (True, data_window.get_sequence_number(i-1) + len(data_window.get_data(i-1).decode()))
+            # Se arma el mensaje
             tcp_dict = {}
             tcp_dict["SYN"] = 0
             tcp_dict["ACK"] = 0
@@ -284,10 +311,13 @@ class socketTCP:
             message_tcp = self.dict_to_tcp(tcp_dict)
             # No actualizamos la secuencia del socket
             print(f"Enviamos: {message_tcp}")
+            # Se envía el mensaje
             self.socket_udp.sendto(message_tcp.encode(), self.dest_adr)
+            # Si no se ha llegado alfinal del mensaje, no se marca y no se retorna la secuencia final
         return (False, None)
     
     def recv_using_go_back_n(self, buff_size):
+        """Función que recibe un mensaje utilizando go back n"""
         # Si tiene una conexion establecida, se levanta un error 
         if not self.established_conection:
             raise NameError("You haven't established a connection yet")
@@ -823,12 +853,7 @@ class socketTCP:
                     break
                 else:
                     print("El mensaje recibido no coincide, tratamos denuevo...")
-                    wa = tcp_dict_["SEQ"]
-                    print(f"Recibí: {wa}")
-                    wa2 = self.seq + len(m.encode())
-                    print(f"pero debi recibir {wa2}")
-            # Actualizamos el tcp_dict
-            # tcp_dict = tcp_dict_
+                    continue
     def recv_using_stop_and_wait(self, buff_size):
         # Si tiene una conexion establecida, se levanta un error
         if not self.established_conection:
