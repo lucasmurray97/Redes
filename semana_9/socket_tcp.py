@@ -23,12 +23,17 @@ class socketTCP:
         self.window_size = None
         self.message_length = None
     def bind(self):
+        """Función que hace bind en el socket sobre la dirección de origen."""
         self.socket_udp.bind((self.address))
     def connect(self, address):
+        """Función que realiza el three-way handshake desde el emisor."""
+        # Si el socket ya estableció una conexión arroja error
         if self.established_conection:
             raise NameError("You already established a connection!")
+        # Se establece la dirección de destino
         self.dest_adr = address
         print(f"Original destiny address: {self.dest_adr}")
+        # Se arma el mensaje tcp para iniciar el handshake
         dict_tcp = {}
         dict_tcp["SYN"] = 1
         dict_tcp["ACK"] = 0
@@ -38,6 +43,7 @@ class socketTCP:
         print(f"Initial sequence: {self.seq}")
         message = self.dict_to_tcp(dict_tcp)
         message = message.encode()
+        # Se envía el mensaje inicial y se queda esperando una respuesta
         self.socket_udp.sendto(message, address)
         while True:
             try:
@@ -49,28 +55,40 @@ class socketTCP:
         dict_tcp = self.tcp_to_dict(buffer.decode())
         recieved_seq = dict_tcp["SEQ"]
         print(f"Recieved sequence: {recieved_seq}")
+        # Se revisa si el mensaje recibido coincide con lo que se espera.
         if dict_tcp["SYN"] == 1 and dict_tcp["ACK"] == 1 and dict_tcp["SEQ"] == self.seq + 1:
+            # Se arma el mensaje de respuesta y actualiza la secuencia del socket.
             dict_tcp["SYN"] = 0
             dict_tcp["ACK"] = 1
             dict_tcp["FIN"] = 0
             dict_tcp["SEQ"] += 1
             self.seq+=1
             message =  self.dict_to_tcp(dict_tcp)
+            # Se responde con el mensaje correspondiente
             self.socket_udp.sendto(message.encode(), addres)
+            # Se fija la secuencia del socket
             self.seq = dict_tcp["SEQ"]
+            # Se marca como que el socket ya tiene una conexión establecida
             self.established_conection = True
+            # Se guarda la dirección de destino
             self.dest_adr = addres
             print(f"New destiny address: {self.dest_adr}")
             print(f"Secuencia del socket: {self.seq}")
             print("Three-way handshake was succesfull")
         else:
+            # Si la información del mensaje no corresponde, se levanta un error
             raise NameError("Three-way handshake wasn't succesfull")
     def accept(self):
+        """Función que implementa el lado del receptor del three-way hanshake"""
+        # De tenerse una conexón, se levanta un error
         if self.established_conection:
             raise NameError("You already established a connection!")
+        # Se lleva la conexión a un nuevo puerto
         new_port = self.address[1]+1
         new_socketTCP = socketTCP(self.address[0], new_port)
+        # Se hace bind en el nuevo puerto
         new_socketTCP.bind()
+        # Se espera el mensaje del socket emisor
         while True:
             try:
                 buffer, address = self.socket_udp.recvfrom(64)
@@ -78,8 +96,10 @@ class socketTCP:
             except socket.timeout as e:
                 print("No se recibió el primer mensaje del handshake, intentamos denuevo...")
         tcp_dict = self.tcp_to_dict(buffer.decode())
+        # Si el mensaje no era de sincronización, se levanta un error
         if tcp_dict["SYN"] == 0:
             raise NameError("Message wasn't for sync")
+        # Se arma el mansaje de respuesta y se espera la respuesta
         self.seq = tcp_dict["SEQ"]
         print(f"Recieved sequence: {self.seq}")
         tcp_dict["ACK"] = 1
@@ -98,7 +118,9 @@ class socketTCP:
         tcp_dict = self.tcp_to_dict(buffer.decode())
         sequence2 = tcp_dict["SEQ"]
         print(f"Recieved sequence: {sequence2}")
+        # Se revisa que la información coincida con lo que se espera
         if tcp_dict["ACK"] == 1 and tcp_dict["SEQ"] == self.seq +1:
+            # Se actualiza la secuencia del socket, la dirección de destino y se marca como que el socket ya estableció una conexión
             self.seq += 1
             new_socketTCP.dest_adr = address
             new_socketTCP.seq = self.seq
@@ -107,9 +129,12 @@ class socketTCP:
             print("Three-way handshake was succesfull")
             return new_socketTCP, new_socketTCP.address
         else:
+            # Si la información no calza, se levanta un error
             raise NameError("Three-way handshake wasn't succesfull")
 
+
     def tcp_to_dict(self, message):
+        """ Función que pasa un mensaje tcp a un diccionario"""
         # [SYN]|||[ACK]|||[FIN]|||[SEQ]|||[DATOS]
         message_list = message.split("|||")
         tcp_dict = {}
@@ -117,19 +142,24 @@ class socketTCP:
         tcp_dict["ACK"] = int(message_list[1])
         tcp_dict["FIN"] = int(message_list[2])
         tcp_dict["SEQ"] = int(message_list[3])
+        # Si vienen datos, se guardan.
         try:
             tcp_dict["DATOS"] = message_list[4]
         except:
             pass
         return tcp_dict
+
     def dict_to_tcp(self, tcp_dict):
+        """Función que pasa un diccionario, con la estructura del generado por tcp_to_dict(...), a un mensaje tcp"""
         tcp_message = str(tcp_dict["SYN"]) + "|||" + str(tcp_dict["ACK"]) + "|||" + str(tcp_dict["FIN"]) + "|||" + str(tcp_dict["SEQ"])
         try:
             tcp_message += "|||" + str(tcp_dict["DATOS"])
         except:
             pass
         return tcp_message
+
     def settimeout(self, timeout_in_seconds):
+        """Función que establece un timeout para las funciones bloqueantes del socket"""
         self.socket_udp.settimeout(timeout_in_seconds)
     def chop_message(self, message, size = 64):
         mes_len = len(message)
@@ -253,7 +283,7 @@ class socketTCP:
                         if last_ack_received == last_seq:
                             print("We recieved the last ack")
                             finished = True
-                            continue 
+                            return
                         # Sino, movemos la ventana y continuamos el envío
                         else: 
                             data_window.move_window(step)
@@ -351,23 +381,26 @@ class socketTCP:
                 closing_dict["FIN"] = 1
                 closing_dict["SEQ"] = self.seq
                 while True:
-                    # Se envia la respuesta
                     print("Sent terminating sequence!")
                     self.socket_udp.sendto(self.dict_to_tcp(closing_dict).encode(), self.dest_adr)
-                    while True:
-                        # Nos quedamos esperando una respuesta
-                        try:
-                            buffer, address = self.socket_udp.recvfrom(128)
+                    # Nos quedamos esperando una respuesta
+                    try:
+                        buffer, address = self.socket_udp.recvfrom(128)
+                    except socket.timeout as e:
+                        # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
+                        print("No se obtuvo respuesta, intentamos denuevo...")
+                        if nmr_timeouts >= 4:
+                            self.starting_transaction = True
+                            self.established_conection = False
+                            self.socket_udp.close()
                             break
-                        except socket.timeout as e:
-                            # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
-                            if nmr_timeouts == 4:
-                                break
+                        else:
                             nmr_timeouts+=1
-                            print("No se obtuvo respuesta, intentamos denuevo...")
+                            continue
+                            
                     ans_dict = self.tcp_to_dict(buffer.decode())
                     # Se revisa que el mensaje recibido cumple el patron de close, sino volvemos a comenzar.
-                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts == 4:
+                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts >= 4:
                         print("Recieved terminating sequence 2!")
                         self.starting_transaction = True
                         self.established_conection = False
@@ -643,23 +676,26 @@ class socketTCP:
                 closing_dict["FIN"] = 1
                 closing_dict["SEQ"] = self.seq
                 while True:
-                    # Se envia la respuesta
                     print("Sent terminating sequence!")
                     self.socket_udp.sendto(self.dict_to_tcp(closing_dict).encode(), self.dest_adr)
-                    while True:
-                        # Nos quedamos esperando una respuesta
-                        try:
-                            buffer, address = self.socket_udp.recvfrom(128)
+                    # Nos quedamos esperando una respuesta
+                    try:
+                        buffer, address = self.socket_udp.recvfrom(128)
+                    except socket.timeout as e:
+                        # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
+                        print("No se obtuvo respuesta, intentamos denuevo...")
+                        if nmr_timeouts >= 4:
+                            self.starting_transaction = True
+                            self.established_conection = False
+                            self.socket_udp.close()
                             break
-                        except socket.timeout as e:
-                            # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
-                            if nmr_timeouts == 4:
-                                break
+                        else:
                             nmr_timeouts+=1
-                            print("No se obtuvo respuesta, intentamos denuevo...")
+                            continue
+                            
                     ans_dict = self.tcp_to_dict(buffer.decode())
                     # Se revisa que el mensaje recibido cumple el patron de close, sino volvemos a comenzar.
-                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts == 4:
+                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts >= 4:
                         print("Recieved terminating sequence 2!")
                         self.starting_transaction = True
                         self.established_conection = False
@@ -884,23 +920,26 @@ class socketTCP:
                 closing_dict["FIN"] = 1
                 closing_dict["SEQ"] = self.seq
                 while True:
-                    # Se envia la respuesta
                     print("Sent terminating sequence!")
                     self.socket_udp.sendto(self.dict_to_tcp(closing_dict).encode(), self.dest_adr)
-                    while True:
-                        # Nos quedamos esperando una respuesta
-                        try:
-                            buffer, address = self.socket_udp.recvfrom(128)
+                    # Nos quedamos esperando una respuesta
+                    try:
+                        buffer, address = self.socket_udp.recvfrom(128)
+                    except socket.timeout as e:
+                        # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
+                        print("No se obtuvo respuesta, intentamos denuevo...")
+                        if nmr_timeouts >= 4:
+                            self.starting_transaction = True
+                            self.established_conection = False
+                            self.socket_udp.close()
                             break
-                        except socket.timeout as e:
-                            # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
-                            if nmr_timeouts == 4:
-                                break
+                        else:
                             nmr_timeouts+=1
-                            print("No se obtuvo respuesta, intentamos denuevo...")
+                            continue
+                            
                     ans_dict = self.tcp_to_dict(buffer.decode())
                     # Se revisa que el mensaje recibido cumple el patron de close, sino volvemos a comenzar.
-                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts == 4:
+                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts >= 4:
                         print("Recieved terminating sequence 2!")
                         self.starting_transaction = True
                         self.established_conection = False

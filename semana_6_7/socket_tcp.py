@@ -263,23 +263,26 @@ class socketTCP:
                 closing_dict["FIN"] = 1
                 closing_dict["SEQ"] = self.seq
                 while True:
-                    # Se envia la respuesta
                     print("Sent terminating sequence!")
                     self.socket_udp.sendto(self.dict_to_tcp(closing_dict).encode(), self.dest_adr)
-                    while True:
-                        # Nos quedamos esperando una respuesta
-                        try:
-                            buffer, address = self.socket_udp.recvfrom(128)
+                    # Nos quedamos esperando una respuesta
+                    try:
+                        buffer, address = self.socket_udp.recvfrom(128)
+                    except socket.timeout as e:
+                        # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
+                        print("No se obtuvo respuesta, intentamos denuevo...")
+                        if nmr_timeouts >= 4:
+                            self.starting_transaction = True
+                            self.established_conection = False
+                            self.socket_udp.close()
                             break
-                        except socket.timeout as e:
-                            # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
-                            if nmr_timeouts == 4:
-                                break
+                        else:
                             nmr_timeouts+=1
-                            print("No se obtuvo respuesta, intentamos denuevo...")
+                            continue
+                            
                     ans_dict = self.tcp_to_dict(buffer.decode())
                     # Se revisa que el mensaje recibido cumple el patron de close, sino volvemos a comenzar.
-                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts == 4:
+                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts >= 4:
                         print("Recieved terminating sequence 2!")
                         self.starting_transaction = True
                         self.established_conection = False
