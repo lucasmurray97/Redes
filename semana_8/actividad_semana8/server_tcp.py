@@ -12,8 +12,8 @@ except socket.timeout as e:
 
 try:
     server_socket2.set_window_size(3)
-    message = server_socket2.recv(256, "selective_repeat")
-    message+=server_socket2.recv(256, "selective_repeat")
+    message = server_socket2.recv(2048, "selective_repeat")
+    # message+=server_socket2.recv(256, "selective_repeat")
     print(message)
 except socket.timeout as e: 
     print("Conection took too long")

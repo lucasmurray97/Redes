@@ -251,7 +251,8 @@ class socketTCP:
                             continue 
 
                 # si no hubo timeout esperamos el ack del receptor
-                answer, address = self.socket_udp.recvfrom(64)
+                if not partially_finished:
+                    answer, address = self.socket_udp.recvfrom(64)
 
             except BlockingIOError:
                 # como nuestro socket no es bloqueante, si no llega nada entramos aquí y continuamos (hacemos esto en vez de usar threads)
@@ -280,8 +281,9 @@ class socketTCP:
                     if partially_finished:
                         # Si recibimos la secuencia del ultimo mensaje enviado, marcamos como terminado el envío
                         if last_ack_received == last_seq:
+                            print("Recieved last ack!")
                             finished = True
-                            continue 
+                            return
                         # Si no, volvemos a esperar el ack correspondiente
                         else: 
                             continue
@@ -291,7 +293,6 @@ class socketTCP:
                     start_pos = self.window_size - step   
                     # Enviamos la porción de la ventana que corresponda
                     (partially_finished, last_seq) = self.send_partial_window_go_back_n(data_window, self.window_size, start_pos, self.init_seq, timer_list)
-
     def send_partial_window_go_back_n(self, data_window, window_size, start_pos, initial_seq, timer_list):
         """Función que envía una ventana parcialmente, desde la posición start_pos"""
         print("Window:")
@@ -390,23 +391,26 @@ class socketTCP:
                 closing_dict["FIN"] = 1
                 closing_dict["SEQ"] = self.seq
                 while True:
-                    # Se envia la respuesta
                     print("Sent terminating sequence!")
                     self.socket_udp.sendto(self.dict_to_tcp(closing_dict).encode(), self.dest_adr)
-                    while True:
-                        # Nos quedamos esperando una respuesta
-                        try:
-                            buffer, address = self.socket_udp.recvfrom(128)
+                    # Nos quedamos esperando una respuesta
+                    try:
+                        buffer, address = self.socket_udp.recvfrom(128)
+                    except socket.timeout as e:
+                        # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
+                        print("No se obtuvo respuesta, intentamos denuevo...")
+                        if nmr_timeouts >= 4:
+                            self.starting_transaction = True
+                            self.established_conection = False
+                            self.socket_udp.close()
                             break
-                        except socket.timeout as e:
-                            # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
-                            if nmr_timeouts == 4:
-                                break
+                        else:
                             nmr_timeouts+=1
-                            print("No se obtuvo respuesta, intentamos denuevo...")
+                            continue
+                            
                     ans_dict = self.tcp_to_dict(buffer.decode())
                     # Se revisa que el mensaje recibido cumple el patron de close, sino volvemos a comenzar.
-                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts == 4:
+                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts >= 4:
                         print("Recieved terminating sequence 2!")
                         self.starting_transaction = True
                         self.established_conection = False
@@ -707,23 +711,26 @@ class socketTCP:
                 closing_dict["FIN"] = 1
                 closing_dict["SEQ"] = self.seq
                 while True:
-                    # Se envia la respuesta
                     print("Sent terminating sequence!")
                     self.socket_udp.sendto(self.dict_to_tcp(closing_dict).encode(), self.dest_adr)
-                    while True:
-                        # Nos quedamos esperando una respuesta
-                        try:
-                            buffer, address = self.socket_udp.recvfrom(128)
+                    # Nos quedamos esperando una respuesta
+                    try:
+                        buffer, address = self.socket_udp.recvfrom(128)
+                    except socket.timeout as e:
+                        # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
+                        print("No se obtuvo respuesta, intentamos denuevo...")
+                        if nmr_timeouts >= 4:
+                            self.starting_transaction = True
+                            self.established_conection = False
+                            self.socket_udp.close()
                             break
-                        except socket.timeout as e:
-                            # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
-                            if nmr_timeouts == 4:
-                                break
+                        else:
                             nmr_timeouts+=1
-                            print("No se obtuvo respuesta, intentamos denuevo...")
+                            continue
+                            
                     ans_dict = self.tcp_to_dict(buffer.decode())
                     # Se revisa que el mensaje recibido cumple el patron de close, sino volvemos a comenzar.
-                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts == 4:
+                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts >= 4:
                         print("Recieved terminating sequence 2!")
                         self.starting_transaction = True
                         self.established_conection = False
@@ -964,23 +971,26 @@ class socketTCP:
                 closing_dict["FIN"] = 1
                 closing_dict["SEQ"] = self.seq
                 while True:
-                    # Se envia la respuesta
                     print("Sent terminating sequence!")
                     self.socket_udp.sendto(self.dict_to_tcp(closing_dict).encode(), self.dest_adr)
-                    while True:
-                        # Nos quedamos esperando una respuesta
-                        try:
-                            buffer, address = self.socket_udp.recvfrom(128)
+                    # Nos quedamos esperando una respuesta
+                    try:
+                        buffer, address = self.socket_udp.recvfrom(128)
+                    except socket.timeout as e:
+                        # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
+                        print("No se obtuvo respuesta, intentamos denuevo...")
+                        if nmr_timeouts >= 4:
+                            self.starting_transaction = True
+                            self.established_conection = False
+                            self.socket_udp.close()
                             break
-                        except socket.timeout as e:
-                            # Si no la logramos recibir, volvemos a enviar el mensaje (hasta 4 veces)
-                            if nmr_timeouts == 4:
-                                break
+                        else:
                             nmr_timeouts+=1
-                            print("No se obtuvo respuesta, intentamos denuevo...")
+                            continue
+                            
                     ans_dict = self.tcp_to_dict(buffer.decode())
                     # Se revisa que el mensaje recibido cumple el patron de close, sino volvemos a comenzar.
-                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts == 4:
+                    if ans_dict["ACK"] == 1 and ans_dict["SEQ"] == self.seq + 1 or nmr_timeouts >= 4:
                         print("Recieved terminating sequence 2!")
                         self.starting_transaction = True
                         self.established_conection = False
