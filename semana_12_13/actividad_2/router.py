@@ -20,16 +20,16 @@ def routes_to_dict(routes_table):
         routes.remove("")
     for i in range(len(routes)):
         routes_dict[i] = {}
-        splited_route = routes[i].split(" ")
+        splited_route = routes[i].strip().split(" ")
         routes_dict[i]["net_ip"] = splited_route[0].split("/")[0]
         routes_dict[i]["ip_range"] = int(splited_route[0].split("/")[1])
+        routes_dict[i]["next_hop_ip"] = splited_route[1]
+        routes_dict[i]["next_hop_port"] = int(splited_route[2])
+        routes_dict[i]["mtu"] = int(splited_route[3])
+        routes_dict[i]["route_dest"] = int(splited_route[4])
         routes_dict[i]["bgp_route"] = []
-        routes_dict[i]["bgp_route"].append(int(splited_route[1]))
-        routes_dict[i]["bgp_route"].append(int(splited_route[2]))
-        routes_dict[i]["next_hop_ip"] = splited_route[3]
-        routes_dict[i]["next_hop_port"] = int(splited_route[4])
-        routes_dict[i]["mtu"] = int(splited_route[5])
-        routes_dict[i]["route_dest"] = int(splited_route[6])
+        for j in range(5, len(splited_route)):
+            routes_dict[i]["bgp_route"].append(int(splited_route[j]))
     return routes_dict
 # Pasamos las rutas a un diccionario
 routes_dict = routes_to_dict(routes_table)
@@ -254,17 +254,18 @@ def write_routes(wrote_routes):
     """Función que escriba las tablas de rutas una vez que convergen"""
     print("FINISHED BGP, here is the final table:")
     print(create_BGP_message())
-    # Se escribe la nueva tabla de rutas en el archivo "bgp_table_router_port.txt, ojo, no puede existir ese archivo"
+    # Se escribe la nueva tabla de rutas en el archivo "bgp_table_router_port.txt, OJO, no puede existir ese archivo"
     table = ""
     for i in routes_dict.keys():
         table += routes_dict[i]["net_ip"] + "/"
-        table += routes_dict[i]["net_ip"] + " "
-        for j in routes_dict[i]["bgp_route"]:
-            table += str(j) + " "
+        table += str(routes_dict[i]["ip_range"]) + " "
         table += str(routes_dict[i]["next_hop_ip"]) + " "
         table += str(routes_dict[i]["next_hop_port"]) + " "
         table += str(routes_dict[i]["mtu"]) + " "
-        table += str(routes_dict[i]["route_dest"]) + "\n"
+        table += str(routes_dict[i]["route_dest"]) + " "
+        for j in routes_dict[i]["bgp_route"]:
+            table += str(j) + " "
+        table += "\n"
     file_name = f"bgp_table_{router_port}.txt"
     open(file_name, "x")
     f = open(file_name, "w")

@@ -19,9 +19,9 @@ class Timer:
 
     def peek_timer(self):
         """Función que revisa el estado del timer"""
-        print("Peeking at timer")
         # Si el timer ya fue iniciado y no se detuvo
         if self.started and not self.stoped:
+            print("Peeking at timer")
             # Se actualiza el current_time
             self.current_time = time.time()
             print(f"Delta: {self.current_time - self.start_time}")
