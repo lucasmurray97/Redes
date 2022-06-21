@@ -267,7 +267,6 @@ def write_routes(wrote_routes):
             table += str(j) + " "
         table += "\n"
     file_name = f"bgp_table_{router_port}.txt"
-    open(file_name, "x")
     f = open(file_name, "w")
     f.write(table)
     f.close()
